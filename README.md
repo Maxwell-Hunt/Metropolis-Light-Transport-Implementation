@@ -1,6 +1,6 @@
 # Metropolis Light Transport Implementation
 
-This project was created by Maxwell Hunt & Alexander Kaminsky.
+This project was created by Maxwell Hunt & [Alexander Kaminsky](https://github.com/kaminskyalexander/)
 
 <table>
     <tr>
