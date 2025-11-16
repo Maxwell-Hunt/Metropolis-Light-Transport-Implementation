@@ -118,26 +118,7 @@ Vec3 Material::expectedContribution(const Path::Vertex& vertex, const Vec3& inDi
             baseColor *= _scene.sampleTexture(
                     *_data.baseColorTextureIdx, vertex.textureCoord);
     }
-    if (_data.getType() == Path::Vertex::BounceType::Refractive) {
-        float cosIn = dot(vertex.normal, inDir);
-        const bool isEntering = cosIn < 0;
-        if (!isEntering)
-            cosIn *= -1;
-        const float eta1 = isEntering ? 1.0f : _data.ior;
-        const float eta2 = isEntering ? _data.ior : 1.0f;
-        const float refractionRatio = eta1 / eta2;
-        float disc = 1.0f - refractionRatio * refractionRatio * (1 - cosIn * cosIn);
-        if (disc < Epsilon)
-            return baseColor;
-        float cosOut = std::sqrt(disc);
-        const float fresnel = computeFresnel(cosIn, cosOut, eta1, eta2);
-        if (fresnel < Epsilon || fresnel > 1.0f - Epsilon)
-            return baseColor;
-        if (vertex.bounceType == Path::Vertex::BounceType::Reflective)
-            baseColor /= fresnel;
-        else
-            baseColor /= (1.0f - fresnel);
-    }
+    // Refractive materials are always white for now.
     return baseColor;
 }
 

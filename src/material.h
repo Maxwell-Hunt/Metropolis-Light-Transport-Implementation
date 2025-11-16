@@ -45,8 +45,22 @@ class Material {
 public:
     Material(const Scene& scene, const MaterialData& data)
         : _scene(scene), _data(data) {}
+    
+    // This is an unfortunately named method given that it does not compute the
+    // bsdf (it does not even have the right signature for that). All it does
+    // is return the (base color * texture color) / PI.
+    //
+    // TODO(Max): This is currently only being used for explicit light
+    // connections. This can be removed when that logic is removed / rewritten.
     Vec3 bsdf(const Path::Vertex& vertex) const;
+
+    // This gives the base color * texture color (except refractive materials)
+    // are always white. 
+    //
+    // TODO(Max): Think about the name.
     Vec3 expectedContribution(const Path::Vertex& vertex, const Vec3& inDir) const;
+
+    // Gets the color that this material emits
     Vec3 emission(const Path::Vertex& vertex) const;
     Path::Vertex::BounceType getType() const { return _data.getType(); }
 

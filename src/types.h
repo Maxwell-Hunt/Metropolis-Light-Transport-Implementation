@@ -20,8 +20,6 @@ using Vec4 = glm::vec4;
 
 using Mat4 = glm::mat4;
 
-using Quat = glm::quat;
-
 using glm::cross;
 using glm::dot;
 using glm::normalize;
