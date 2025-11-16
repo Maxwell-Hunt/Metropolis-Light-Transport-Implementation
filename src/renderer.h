@@ -26,5 +26,5 @@ public:
     virtual int numSamplesPerPixel() const = 0;
 
 protected:
-    bool _isStopping = false;
+    std::atomic<bool> _isStopping = false;
 };

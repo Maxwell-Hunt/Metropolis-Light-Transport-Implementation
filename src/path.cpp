@@ -79,7 +79,7 @@ Path Path::createRandomLightPath(const Scene& scene) {
     if (scene.lights.empty())
         return path;
     path._path[path._pathLength] =
-        chooseRandomVertexOnLight(scene, PCG32::pcg32_fast() % scene.lights.size());
+        chooseRandomVertexOnLight(scene, chooseRandomLight(scene));
     ++path._pathLength;
     return path;
 }
