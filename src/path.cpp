@@ -32,7 +32,6 @@ Path::Vertex chooseRandomVertexOnTriangle(const Mesh::Triangle& triangle) {
     const float gamma = u2 * sqrtU1;
 
     return Path::Vertex{
-        .connectionType = Path::Vertex::ConnectionType::Explicit,
         .bounceType = Path::Vertex::BounceType::None,
         .position =
             triangle.positions[0] * alpha +
@@ -55,7 +54,6 @@ Path::Vertex chooseRandomVertexOnLight(const Scene& scene, const std::size_t lig
     return std::visit(Visitor{
         [&](const PointLight& light) {
             return Path::Vertex{
-                .connectionType = Path::Vertex::ConnectionType::Explicit,
                 .position = light.position,
                 .lightIdx = lightIdx};
         },
@@ -100,7 +98,6 @@ std::optional<Ray> Path::addBounce(
     }
 
     _path[_pathLength] = Vertex{
-        Path::Vertex::ConnectionType::Implicit,
         Path::Vertex::BounceType::None,
         hit->position,
         hit->normal,
@@ -128,7 +125,6 @@ Path::Slice Path::getSlice(std::size_t first, std::size_t last) const {
 Path Path::createRandomEyePath(const Scene& scene, Ray ray) {
     Path p;
     p._path[0] = Vertex{
-        .connectionType = Path::Vertex::ConnectionType::Origin,
         .bounceType = Path::Vertex::BounceType::None,
         .position = ray.o
     };
@@ -249,48 +245,23 @@ EvaluationResult evaluate(const Scene& scene, Path::Slice path) {
     EvaluationResult result{
         .radiance = Vec3(0.0f),
         .russianRouletteRadiance = Vec3(0.0f)};
+
     for (std::size_t i = 1;i < path.size()-1; ++i) {
-        switch(path[i+1].connectionType) {
-        case Path::Vertex::ConnectionType::Implicit: {
-            EvaluationResult implicitEvaluation =
-                evaluateImplicit(scene, path[i-1], path[i], path[i+1]);
-            throughput *= implicitEvaluation.radiance;
-            russianRouletteThroughput *= implicitEvaluation.russianRouletteRadiance;
-            if (i == path.size()-2) {
-                const Material& material = scene.getMaterial(path[i+1].materialIdx);
-                const Vec3 emission = material.emission(path[i+1]);
-                result.radiance += throughput * emission;
-                result.russianRouletteRadiance += russianRouletteThroughput * emission;
-            }
-            break;
-        }
-        case Path::Vertex::ConnectionType::Explicit: {
-            if (i < path.size() - 2) {
-                const Vec3 explicitEvaluation =
-                    evaluateExplicit(scene, path[i-1], path[i], path[i+1], path[i+2]);
-                throughput *= explicitEvaluation;
-                russianRouletteThroughput *= explicitEvaluation;
-            } else if (path[i+1].lightIdx) {
-                const Vec3 explicitEvaluation =
-                    evaluateExplicitLight(scene, path[i-1], path[i], path[i+1]);
-                result.radiance += throughput * explicitEvaluation;
-                result.russianRouletteRadiance += russianRouletteThroughput * explicitEvaluation;
-            } else {
-                const Material& material = scene.getMaterial(path[i+1].materialIdx);
-                const Vec3 emission = material.emission(path[i+1]);
-                result.radiance += throughput * emission;
-                result.russianRouletteRadiance += russianRouletteThroughput * emission;
-            }
-            break;
-        }
-        default:
-            break;
-        }
+        EvaluationResult implicitEvaluation =
+            evaluateImplicit(scene, path[i-1], path[i], path[i+1]);
+        throughput *= implicitEvaluation.radiance;
+        russianRouletteThroughput *= implicitEvaluation.russianRouletteRadiance;
 
         const Material& material = scene.getMaterial(path[i].materialIdx);
-            const Vec3 emission = material.emission(path[i]);
+        const Vec3 emission = material.emission(path[i]);
         result.radiance += throughput * emission;
         result.russianRouletteRadiance += russianRouletteThroughput * emission;
     }
+
+    const Material& material = scene.getMaterial(path.back().materialIdx);
+    const Vec3 emission = material.emission(path.back());
+    result.radiance += throughput * emission;
+    result.russianRouletteRadiance += russianRouletteThroughput * emission;
+
     return result;
 }

@@ -21,12 +21,6 @@ public:
     static constexpr float ExplicitPathProbability = 1.0f;
 
     struct Vertex {
-        enum class ConnectionType {
-            Origin,
-            Implicit,
-            Explicit
-        };
-        
         enum class BounceType {
             None = 0,
             Diffuse,
@@ -34,7 +28,6 @@ public:
             Refractive
         };
 
-        ConnectionType connectionType;
         BounceType bounceType;
         Vec3 position;
         Vec3 normal;

@@ -192,7 +192,6 @@ std::optional<MLTProcess::MutationInfo> MLTProcess::eyePathPerturbation(
     MutationInfo info{
         .proposal = {
             .path = Path(Path::Vertex{
-                .connectionType = Path::Vertex::ConnectionType::Origin,
                 .bounceType = Path::Vertex::BounceType::None,
                 .position = nextRay->o}),
             .pixel = newPixel},
