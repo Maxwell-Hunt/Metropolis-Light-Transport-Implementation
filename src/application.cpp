@@ -202,13 +202,9 @@ void Application::run(IRenderer& renderer, int numJobs) {
 
         if (_saveNextFrameToDisk) {
             auto now = std::chrono::system_clock::now();
-            auto t = std::chrono::system_clock::to_time_t(now);
-            std::tm* tm = std::localtime(&t);
-            if (tm) {
-                std::ostringstream oss;
-                oss << "screenshot_" << std::put_time(tm, "%Y_%m_%d_%H_%M_%S") << ".png";
-                frameBuffer.save(oss.str());
-            }
+            auto t = std::chrono::zoned_time{std::chrono::current_zone(), now};
+            std::string filename = std::format("screenshot_{:%Y_%m_%d_%H_%M_%S}.png", t);
+            frameBuffer.save(filename);
             _saveNextFrameToDisk = false;
         }
 
