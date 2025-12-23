@@ -106,8 +106,10 @@ GraphicsContext::GraphicsContext(Window& window) : _window(window) {
     glfwMakeContextCurrent(window.handle());
 
     glewExperimental = true;
-    if (glewInit() != GLEW_OK) {
-        std::cerr << "Failed to initialize GLEW." << std::endl;
+    GLenum status = glewInit();
+    if (status != GLEW_OK) {
+        std::cerr << "Failed to initialize GLEW: "
+                  << glewGetErrorString(status) << std::endl;
         glfwTerminate();
         std::exit(-1);
     }

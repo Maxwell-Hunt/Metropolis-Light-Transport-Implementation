@@ -47,6 +47,11 @@ cmake ..
 cmake --build . --config Release
 ```
 
+To build without Wayland on Linux, use:
+```
+cmake -MLT_ENABLE_WAYLAND=OFF ..
+```
+
 ## Profiling with Tracy
 
 ![Profiling with Tracy](tracy.png)
@@ -55,10 +60,10 @@ Our code has been instrumented with the help of
 [Tracy](https://github.com/wolfpld/tracy) to assist in identifying performance
 bottlenecks.
 
-To enable profiling in the build, instead use:
+To enable profiling in the build, in the `build` directory, run:
 
 ```
-cmake -DTRACY_ENABLE=ON ..
+cmake -DMLT_ENABLE_TRACY=ON ..
 ```
 
 Once built, run the application as usual. Profiling of instrumented code will be
