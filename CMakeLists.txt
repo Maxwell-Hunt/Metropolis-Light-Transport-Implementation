@@ -10,13 +10,17 @@ set(CMAKE_CXX_STANDARD 23)
 option(MLT_ENABLE_TRACY "Enable profiling in Tracy" OFF)
 cmake_dependent_option(MLT_ENABLE_WAYLAND "Enable Wayland/EGL support" ON "UNIX;NOT APPLE" OFF)
 
+# Library options
+set(BUILD_SHARED_LIBS OFF)
 set(TRACY_ENABLE ${MLT_ENABLE_TRACY} CACHE BOOL "Enable profiling in Tracy" FORCE)
+set(GLM_BUILD_LIBRARY OFF CACHE BOOL "Build GLM dynamic library" FORCE)
 
 if(MLT_ENABLE_WAYLAND)
     message(STATUS "MLT: Wayland support enabled")
 endif()
 set(GLFW_BUILD_WAYLAND ${MLT_ENABLE_WAYLAND} CACHE BOOL "Build support for Wayland" FORCE)
 set(GLEW_EGL ${MLT_ENABLE_WAYLAND} CACHE BOOL "Enable EGL support" FORCE)
+set(BUILD_UTILS OFF CACHE BOOL "Build GLEW utilities" FORCE)
 
 # GLEW repository does not contain generated sources. Only releases include
 # generated sources.
@@ -48,7 +52,6 @@ set(SRC_FILES
         src/scene.cpp
         src/threadpool.cpp
         src/mlt.cpp
-        external/tracy/public/TracyClient.cpp
 )
 
 add_executable(MLT ${SRC_FILES})
@@ -75,4 +78,4 @@ target_include_directories(MLT PUBLIC ${glew_SOURCE_DIR}/include)
 target_include_directories(MLT PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/fastgltf/include)
 target_include_directories(MLT PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/args)
 target_include_directories(MLT PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/external/stb_image)
-target_link_libraries(MLT PRIVATE TracyClient PUBLIC argparse glfw glew_s fastgltf glm::glm)
+target_link_libraries(MLT PUBLIC TracyClient argparse glfw glew_s fastgltf glm::glm)

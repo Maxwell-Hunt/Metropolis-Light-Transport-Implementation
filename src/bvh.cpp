@@ -161,7 +161,10 @@ BVH::BVH(const Mesh& mesh, const std::size_t startIdx, const std::size_t count) 
     std::vector<Vec3> triangleCenters;
     triangles.reserve(count);
     triangleCenters.reserve(count);
-    Node& rootNode = nodes.emplace_back(AABB4(), 0, count);
+
+    assert(count < std::numeric_limits<std::uint32_t>::max());
+    Node& rootNode = nodes.emplace_back(AABB4(), 0, static_cast<std::uint32_t>(count));
+
     for (std::size_t i = startIdx; i < startIdx + count; ++i) {
         Triangle& triangle = triangles.emplace_back(mesh.triangles[i].positions, i);
         triangleCenters.push_back(triangle.center());
