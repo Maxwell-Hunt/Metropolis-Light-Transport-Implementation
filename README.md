@@ -47,6 +47,14 @@ cmake ..
 cmake --build . --config Release
 ```
 
+> [!NOTE]
+> The `--config` argument only works with multi-configuration generators (for example, Visual Studio Generators, Ninja Multi-Config).
+> If the generator isn't a multi-configuration one (for example, Unix Makefiles, Ninja), then build type is set via the `CMAKE_BUILD_TYPE` CMake variable.
+> ```
+> cmake -DCMAKE_BUILD_TYPE=Release ..
+> cmake --build .
+> ```
+
 To build without Wayland on Linux, use:
 ```
 cmake -MLT_ENABLE_WAYLAND=OFF ..
