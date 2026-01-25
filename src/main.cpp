@@ -57,6 +57,29 @@ MLT::EnabledMutations getEnabledMutationsFromString(
     return result;
 }
 
+std::pair<std::size_t, std::size_t> getWindowSizeFromString(const std::string& sizeString) {
+    if (sizeString == "small")  return {512, 384};
+    if (sizeString == "med")    return {1024, 768};
+    if (sizeString == "large")  return {1920, 1440};
+    
+    auto formatErrorMessage = 
+        std::format("Invalid window size format: '{}'. Use 'small', 'med', 'large', or 'WIDTHxHEIGHT'", sizeString);
+    
+    // Parse custom dimensions as WIDTHxHEIGHT
+    size_t xPos = sizeString.find('x');
+    if (xPos == std::string::npos || xPos == 0 || xPos == sizeString.size() - 1)
+        throw std::runtime_error(formatErrorMessage);
+    
+    try {
+        std::size_t width = std::stoul(sizeString.substr(0, xPos));
+        std::size_t height = std::stoul(sizeString.substr(xPos + 1));
+        
+        return {width, height};
+    } catch (const std::invalid_argument& e) {
+        throw std::runtime_error(formatErrorMessage);
+    }
+}
+
 } // namespace
 
 int main(int argc, const char* argv[]) {
@@ -97,8 +120,14 @@ int main(int argc, const char* argv[]) {
             "will be used.")
         .store_into(enabledMutationsString);
 
+    std::string windowSizeString = "med";
+    parser.add_argument("-w", "--window-size")
+        .metavar("SIZE")
+        .help("Window size as a preset ('small', 'med', 'large') or custom dimensions (WIDTHxHEIGHT). Default is 'med'.")
+        .store_into(windowSizeString);
+
     parser.add_epilog(std::format(
-        "Example usage: {} ../media/room_far.glb -m new,lens -j 8",
+        "Example usage: {} ../media/room_far.glb -m new,lens -j 8 -w large",
         ApplicationName));
 
     try {
@@ -112,8 +141,10 @@ int main(int argc, const char* argv[]) {
         std::exit(1);
     }
 
+    auto [windowWidth, windowHeight] = getWindowSizeFromString(windowSizeString);
+
     Camera camera(
-        512, 384, 45.0f, 0.032f,
+        windowWidth, windowHeight, 45.0f, 0.032f,
         Vec3(0.0f, 0.0f, 1.5f),
         Vec3(0.0f, 0.0f, -1.0f),
         Vec3(0.0f, 1.0f, 0.0f));
@@ -122,7 +153,7 @@ int main(int argc, const char* argv[]) {
     if (!isSceneLoaded)
         std::exit(1);
 
-    Window window(512, 384, WindowTitleMLT);
+    Window window(windowWidth, windowHeight, WindowTitleMLT);
     GraphicsContext graphicsContext(window);
     Application application(window, graphicsContext, scene);
     if (usePathTracer) {
