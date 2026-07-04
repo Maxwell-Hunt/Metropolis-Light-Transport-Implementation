@@ -212,8 +212,9 @@ std::optional<MLTProcess::MutationInfo> MLTProcess::eyePathPerturbation(
         }
 
         if (currentVertex.bounceType == Path::Vertex::BounceType::Diffuse) {
+            // In this case we can't reconnect to the original path.
             if(i == _currentState->path.length()-1)
-                return info;
+                break;
 
             const Path::Vertex& nextVertex = _currentState->path.vertex(i+1);
 
@@ -221,7 +222,8 @@ std::optional<MLTProcess::MutationInfo> MLTProcess::eyePathPerturbation(
                 if (!multiChain)
                     return std::nullopt;
                 // Multi-chain bounce
-                Vec3 originalDirection = nextVertex.position - currentVertex.position;
+                Vec3 originalDirection =
+                    normalize(nextVertex.position - currentVertex.position);
                 nextRay->d = offsetBounceDirection(0.0001f, 0.1f, originalDirection);
                 Txy *= std::max(0.0f, dot(originalDirection, currentVertex.normal));
                 Tyx *= std::max(0.0f, dot(nextRay->d, currentVertex.normal));
