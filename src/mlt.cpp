@@ -154,6 +154,8 @@ std::optional<MLTProcess::MutationInfo> MLTProcess::bidirectionalMutation(
 
     // pd is the probability of deleting the path that we did
     // pa is the probability of adding the path that we did
+
+    // divide by (currentLength - deletedLength) since it was a uniform distribution.
     float pd = clippedGeoDist.pdf(deletedLength) / (currentLength - deletedLength);
     float pa = twoSidedClippedGeoDist.pdf(addedLength);
     Tyx *= pd * pa;
@@ -165,7 +167,7 @@ std::optional<MLTProcess::MutationInfo> MLTProcess::bidirectionalMutation(
     minAddedLength = 0;
     twoSidedClippedGeoDist.setParameters(minAddedLength, addedLength, maxAddedLength);
 
-    pd = clippedGeoDist.pdf(addedLength) / (currentLength - addedLength);
+    pd = clippedGeoDist.pdf(addedLength) / (newLength - addedLength);
     pa = twoSidedClippedGeoDist.pdf(deletedLength);
     Txy *= pd * pa;
 
