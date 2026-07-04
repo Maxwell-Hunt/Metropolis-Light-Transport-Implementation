@@ -61,6 +61,9 @@ void PathTracer::accumulateBlock(
                 for (std::size_t i = 1;i < eyePath.length(); ++i) {
                     const Path::Vertex& prevVertex = eyePath.vertex(i-1);
                     const Path::Vertex& vertex = eyePath.vertex(i);
+                    
+                    const Material& material = scene.getMaterial(vertex.materialIdx);
+                    radiance += throughput * material.emission(vertex);
 
                     if (i < eyePath.length() - 1 ) {
                         const Path::Vertex& nextVertex = eyePath.vertex(i+1);
@@ -68,15 +71,6 @@ void PathTracer::accumulateBlock(
                             evaluateImplicit(scene, prevVertex, vertex, nextVertex);
                         throughput *= implicitEvaluation.russianRouletteRadiance;
                     }
-                    
-                    if (vertex.bounceType == Path::Vertex::BounceType::Diffuse &&
-                        lightPath.length() > 0) {
-                        radiance += 0.5f * throughput * evaluateExplicitLight(
-                            scene, prevVertex, vertex, lightPath.vertex(0));
-                    }
-                    
-                    const Material& material = scene.getMaterial(vertex.materialIdx);
-                    radiance += 0.5f * throughput * material.emission(vertex);
                 }
 
             }
