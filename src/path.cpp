@@ -247,15 +247,15 @@ EvaluationResult evaluate(const Scene& scene, Path::Slice path) {
         .russianRouletteRadiance = Vec3(0.0f)};
 
     for (std::size_t i = 1;i < path.size()-1; ++i) {
-        EvaluationResult implicitEvaluation =
-            evaluateImplicit(scene, path[i-1], path[i], path[i+1]);
-        throughput *= implicitEvaluation.radiance;
-        russianRouletteThroughput *= implicitEvaluation.russianRouletteRadiance;
-
         const Material& material = scene.getMaterial(path[i].materialIdx);
         const Vec3 emission = material.emission(path[i]);
         result.radiance += throughput * emission;
         result.russianRouletteRadiance += russianRouletteThroughput * emission;
+
+        EvaluationResult implicitEvaluation =
+            evaluateImplicit(scene, path[i-1], path[i], path[i+1]);
+        throughput *= implicitEvaluation.radiance;
+        russianRouletteThroughput *= implicitEvaluation.russianRouletteRadiance;        
     }
 
     const Material& material = scene.getMaterial(path.back().materialIdx);
