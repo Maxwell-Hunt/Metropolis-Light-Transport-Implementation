@@ -154,6 +154,8 @@ std::optional<MLTProcess::MutationInfo> MLTProcess::bidirectionalMutation(
 
     // pd is the probability of deleting the path that we did
     // pa is the probability of adding the path that we did
+
+    // divide by (currentLength - deletedLength) since it was a uniform distribution.
     float pd = clippedGeoDist.pdf(deletedLength) / (currentLength - deletedLength);
     float pa = twoSidedClippedGeoDist.pdf(addedLength);
     Tyx *= pd * pa;
@@ -165,7 +167,7 @@ std::optional<MLTProcess::MutationInfo> MLTProcess::bidirectionalMutation(
     minAddedLength = 0;
     twoSidedClippedGeoDist.setParameters(minAddedLength, addedLength, maxAddedLength);
 
-    pd = clippedGeoDist.pdf(addedLength) / (currentLength - addedLength);
+    pd = clippedGeoDist.pdf(addedLength) / (newLength - addedLength);
     pa = twoSidedClippedGeoDist.pdf(deletedLength);
     Txy *= pd * pa;
 
@@ -212,8 +214,9 @@ std::optional<MLTProcess::MutationInfo> MLTProcess::eyePathPerturbation(
         }
 
         if (currentVertex.bounceType == Path::Vertex::BounceType::Diffuse) {
+            // In this case we can't reconnect to the original path.
             if(i == _currentState->path.length()-1)
-                return info;
+                break;
 
             const Path::Vertex& nextVertex = _currentState->path.vertex(i+1);
 
@@ -221,7 +224,8 @@ std::optional<MLTProcess::MutationInfo> MLTProcess::eyePathPerturbation(
                 if (!multiChain)
                     return std::nullopt;
                 // Multi-chain bounce
-                Vec3 originalDirection = nextVertex.position - currentVertex.position;
+                Vec3 originalDirection =
+                    normalize(nextVertex.position - currentVertex.position);
                 nextRay->d = offsetBounceDirection(0.0001f, 0.1f, originalDirection);
                 Txy *= std::max(0.0f, dot(originalDirection, currentVertex.normal));
                 Tyx *= std::max(0.0f, dot(nextRay->d, currentVertex.normal));
