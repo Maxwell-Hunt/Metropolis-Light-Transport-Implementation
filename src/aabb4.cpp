@@ -5,8 +5,32 @@
 #include "aabb4.h"
 
 #include <algorithm>
+#include <immintrin.h>
 
 #include "types.h"
+
+namespace {
+
+__m128 loadVec4(const Vec4& value) {
+    return _mm_setr_ps(value.x, value.y, value.z, value.w);
+}
+
+Vec4 storeVec4(__m128 value) {
+    alignas(16) float components[4];
+    _mm_storeu_ps(components, value);
+    return Vec4(components[0], components[1], components[2], components[3]);
+}
+
+glm::bvec4 storeMask(__m128 mask) {
+    const int bits = _mm_movemask_ps(mask);
+    return glm::bvec4(
+        (bits & 0x1) != 0,
+        (bits & 0x2) != 0,
+        (bits & 0x4) != 0,
+        (bits & 0x8) != 0);
+}
+
+}
 
 float AABB4::getMin(int idx, int axis) const {
     switch (axis) {
@@ -61,30 +85,43 @@ AABB4::AABB4(const AABB& a, const AABB& b, const AABB& c, const AABB& d) {
 }
 
 AABB4::HitInfo AABB4::intersect(const Ray& ray) const {
-    const Vec4 tminX = (_minX - ray.o.x) / ray.d.x;
-    const Vec4 tmaxX = (_maxX - ray.o.x) / ray.d.x;
-    const Vec4 tminY = (_minY - ray.o.y) / ray.d.y;
-    const Vec4 tmaxY = (_maxY - ray.o.y) / ray.d.y;
-    const Vec4 tminZ = (_minZ - ray.o.z) / ray.d.z;
-    const Vec4 tmaxZ = (_maxZ - ray.o.z) / ray.d.z;
+    const __m128 minX = loadVec4(_minX);
+    const __m128 minY = loadVec4(_minY);
+    const __m128 minZ = loadVec4(_minZ);
+    const __m128 maxX = loadVec4(_maxX);
+    const __m128 maxY = loadVec4(_maxY);
+    const __m128 maxZ = loadVec4(_maxZ);
 
-    const Vec4 tx1 = glm::min(tminX, tmaxX);
-    const Vec4 tx2 = glm::max(tminX, tmaxX);
-    const Vec4 ty1 = glm::min(tminY, tmaxY);
-    const Vec4 ty2 = glm::max(tminY, tmaxY);
-    const Vec4 tz1 = glm::min(tminZ, tmaxZ);
-    const Vec4 tz2 = glm::max(tminZ, tmaxZ);
+    const __m128 originX = _mm_set1_ps(ray.o.x);
+    const __m128 originY = _mm_set1_ps(ray.o.y);
+    const __m128 originZ = _mm_set1_ps(ray.o.z);
+    const __m128 directionX = _mm_set1_ps(ray.d.x);
+    const __m128 directionY = _mm_set1_ps(ray.d.y);
+    const __m128 directionZ = _mm_set1_ps(ray.d.z);
 
-    const Vec4 t1 = glm::max(tx1, glm::max(ty1, tz1));
-    const Vec4 t2 = glm::min(tx2, glm::min(ty2, tz2));
+    const __m128 tminX = _mm_div_ps(_mm_sub_ps(minX, originX), directionX);
+    const __m128 tmaxX = _mm_div_ps(_mm_sub_ps(maxX, originX), directionX);
+    const __m128 tminY = _mm_div_ps(_mm_sub_ps(minY, originY), directionY);
+    const __m128 tmaxY = _mm_div_ps(_mm_sub_ps(maxY, originY), directionY);
+    const __m128 tminZ = _mm_div_ps(_mm_sub_ps(minZ, originZ), directionZ);
+    const __m128 tmaxZ = _mm_div_ps(_mm_sub_ps(maxZ, originZ), directionZ);
 
-    const glm::bvec4 isHit =
-        glm::lessThanEqual(t1, t2) &
-        glm::not_(
-            glm::lessThan(t1, Vec4(0.0f)) &
-            glm::lessThan(t2, Vec4(0.0f)));
+    const __m128 tx1 = _mm_min_ps(tminX, tmaxX);
+    const __m128 tx2 = _mm_max_ps(tminX, tmaxX);
+    const __m128 ty1 = _mm_min_ps(tminY, tmaxY);
+    const __m128 ty2 = _mm_max_ps(tminY, tmaxY);
+    const __m128 tz1 = _mm_min_ps(tminZ, tmaxZ);
+    const __m128 tz2 = _mm_max_ps(tminZ, tmaxZ);
 
-    return {isHit, t1};
+    const __m128 t1 = _mm_max_ps(tx1, _mm_max_ps(ty1, tz1));
+    const __m128 t2 = _mm_min_ps(tx2, _mm_min_ps(ty2, tz2));
+
+    const __m128 zero = _mm_setzero_ps();
+    const __m128 isHit = _mm_andnot_ps(
+        _mm_and_ps(_mm_cmplt_ps(t1, zero), _mm_cmplt_ps(t2, zero)),
+        _mm_cmple_ps(t1, t2));
+
+    return {storeMask(isHit), storeVec4(t1)};
 }
 
 
