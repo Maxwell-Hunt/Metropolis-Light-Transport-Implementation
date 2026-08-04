@@ -9,15 +9,29 @@
 
 #include "types.h"
 
+// Clang and GCC define __SSE__ if it is supported and MSVC defines
+// _M_X64 when compiling for 64 bit x86 (which is guaranteed to support SSE).
+// _M_IX86_FP >= 1 ensures that the floating point instruction set being targeted
+// is SSE or SSE2 when compiling with MSVC for 32 bit x86. 
+#if defined(__SSE__) || defined(_M_X64) || \
+    (defined(_M_IX86_FP) && _M_IX86_FP >= 1)
+    #define HAS_SSE 1
+#else
+    #define HAS_SSE 0
+#endif
+
+#define SIMD_ALIGNED alignas(16)
+
 namespace {
 
+#ifdef HAS_SSE
 __m128 loadVec4(const Vec4& value) {
     return _mm_setr_ps(value.x, value.y, value.z, value.w);
 }
 
 Vec4 storeVec4(__m128 value) {
-    alignas(16) float components[4];
-    _mm_storeu_ps(components, value);
+    SIMD_ALIGNED float components[4];
+    _mm_store_ps(components, value);
     return Vec4(components[0], components[1], components[2], components[3]);
 }
 
@@ -29,6 +43,7 @@ glm::bvec4 storeMask(__m128 mask) {
         (bits & 0x4) != 0,
         (bits & 0x8) != 0);
 }
+#endif
 
 }
 
@@ -85,6 +100,7 @@ AABB4::AABB4(const AABB& a, const AABB& b, const AABB& c, const AABB& d) {
 }
 
 AABB4::HitInfo AABB4::intersect(const Ray& ray) const {
+#if HAS_SSE
     const __m128 minX = loadVec4(_minX);
     const __m128 minY = loadVec4(_minY);
     const __m128 minZ = loadVec4(_minZ);
@@ -122,6 +138,30 @@ AABB4::HitInfo AABB4::intersect(const Ray& ray) const {
         _mm_cmple_ps(t1, t2));
 
     return {storeMask(isHit), storeVec4(t1)};
+#else
+    const Vec4 tminX = (_minX - ray.o.x) / ray.d.x;
+    const Vec4 tmaxX = (_maxX - ray.o.x) / ray.d.x;
+    const Vec4 tminY = (_minY - ray.o.y) / ray.d.y;
+    const Vec4 tmaxY = (_maxY - ray.o.y) / ray.d.y;
+    const Vec4 tminZ = (_minZ - ray.o.z) / ray.d.z;
+    const Vec4 tmaxZ = (_maxZ - ray.o.z) / ray.d.z;
+
+    const Vec4 tx1 = glm::min(tminX, tmaxX);
+    const Vec4 tx2 = glm::max(tminX, tmaxX);
+    const Vec4 ty1 = glm::min(tminY, tmaxY);
+    const Vec4 ty2 = glm::max(tminY, tmaxY);
+    const Vec4 tz1 = glm::min(tminZ, tmaxZ);
+    const Vec4 tz2 = glm::max(tminZ, tmaxZ);
+
+    const Vec4 t1 = glm::max(tx1, glm::max(ty1, tz1));
+    const Vec4 t2 = glm::min(tx2, glm::min(ty2, tz2));
+
+    const glm::bvec4 isHit =
+        glm::lessThanEqual(t1, t2) &
+        glm::not_(
+            glm::lessThan(t1, Vec4(0.0f)) &
+            glm::lessThan(t2, Vec4(0.0f)));
+
+    return {isHit, t1};
+#endif
 }
-
-
