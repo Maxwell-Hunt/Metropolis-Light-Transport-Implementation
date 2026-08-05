@@ -205,18 +205,18 @@ std::optional<BVH::HitInfo> BVH::intersect(
             AABB4::HitInfo hitInfo = node.childBounds.intersect(ray);
             for (int i = 0; i < 4; ++i) {
                 std::optional<int> bestIdx;
-                float bestDist = std::numeric_limits<float>::infinity();
-                // Find the next closest hit
-                for (int i = 0; i < 4; ++i) {
-                    if (hitInfo.isHit[i] && hitInfo.distances[i] < bestDist) {
-                        bestDist = hitInfo.distances[i];
-                        bestIdx = i;
+                float farthestDist = -std::numeric_limits<float>::infinity();
+                // Find the farthest hit to push to the LIFO stack first.
+                for (int j = 0; j < 4; ++j) {
+                    if (hitInfo.isHit[j] && hitInfo.distances[j] > farthestDist) {
+                        farthestDist = hitInfo.distances[j];
+                        bestIdx = j;
                     }
                 }
                 if (!bestIdx)
                     break; // No more hits
                 const std::uint32_t childIdx = node.idx + *bestIdx;
-                stack.push({childIdx, bestDist});
+                stack.push({childIdx, farthestDist});
                 // Mark as used so we don't push it again
                 hitInfo.isHit[*bestIdx] = false;
             }
