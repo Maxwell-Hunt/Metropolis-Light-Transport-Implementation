@@ -102,8 +102,8 @@ std::optional<MLTProcess::MutationInfo> MLTProcess::bidirectionalMutation(
     int addedLength = twoSidedClippedGeoDist(PCG32::RandomGenerator);
 
     MutationInfo info{
-        .proposal = {.path = Path(_currentState->path.vertex(0))},
-        .type = MutationInfo::Type::Bidirectional};
+        .proposal = {.path = Path(_currentState->path.vertex(0))}
+    };
 
     float Txy = 1.0f;
     float Tyx = 1.0f;
@@ -196,8 +196,7 @@ std::optional<MLTProcess::MutationInfo> MLTProcess::eyePathPerturbation(
             .path = Path(Path::Vertex{
                 .bounceType = Path::Vertex::BounceType::None,
                 .position = nextRay->o}),
-            .pixel = newPixel},
-        .type = multiChain ? MutationInfo::Type::MultiChain : MutationInfo::Type::Lens};
+            .pixel = newPixel}};
 
     float Txy = 1.0f;
     float Tyx = 1.0f;
@@ -257,7 +256,7 @@ std::optional<MLTProcess::MutationInfo> MLTProcess::computeNewPathMutation(
     if (!_currentState)
         return std::nullopt;
 
-    MutationInfo info = MutationInfo{.type = MutationInfo::Type::NewPath};
+    MutationInfo info;
     Ray newRay;
     std::tie(info.proposal.pixel, newRay) = randomEyeRay(scene);
     info.proposal.path = Path::createRandomEyePath(scene, newRay);

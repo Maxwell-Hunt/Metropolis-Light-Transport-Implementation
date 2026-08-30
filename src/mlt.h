@@ -38,15 +38,8 @@ private:
     };
 
     struct MutationInfo {
-        enum class Type : int {
-            NewPath = 0,
-            Lens = 1,
-            MultiChain = 2,
-            Bidirectional = 3
-        };
         State proposal;
         float acceptance;
-        Type type;
     };
 
     // Bidirectional mutations involve taking the current light path,
