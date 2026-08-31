@@ -32,6 +32,7 @@ struct MutationInfo {
 class Mutator {
 public:
     explicit Mutator(const MLT& renderer);
+    virtual ~Mutator() = default;
     virtual std::optional<Metropolis::MutationInfo>
     computeRandomMutation(const Scene& scene, const Metropolis::State& currentState) = 0;
     virtual Metropolis::State initialize(const Scene& scene) = 0;
