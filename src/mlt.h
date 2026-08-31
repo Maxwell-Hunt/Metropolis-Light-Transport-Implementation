@@ -34,13 +34,15 @@ public:
     explicit Mutator(const MLT& renderer);
     virtual ~Mutator() = default;
     virtual std::optional<Metropolis::MutationInfo>
-    computeRandomMutation(const Scene& scene, const Metropolis::State& currentState) = 0;
-    virtual Metropolis::State initialize(const Scene& scene) = 0;
-    // TODO: Perhaps there should be some way to guarantee computeRandomMutation has been called
-    // before / in between calls to acceptMutation
-    virtual void acceptMutation() = 0;
+    computeRandomMutation(const Scene& scene) = 0;
+    virtual void initialize(const Scene& scene) = 0;
+    virtual void acceptMutation(Metropolis::State&& newState) {
+        _currentState = std::move(newState);
+    };
+    const Metropolis::State& getCurrentState() { return *_currentState; };
 protected:
     const MLT& _renderer;
+    std::optional<Metropolis::State> _currentState;
 };
 
 class PathSpaceMutator : public Mutator {
@@ -53,11 +55,11 @@ public:
     };
     explicit PathSpaceMutator(const MLT& renderer);
     virtual std::optional<Metropolis::MutationInfo>
-    computeRandomMutation(const Scene& scene, const Metropolis::State& currentState) override;
+    computeRandomMutation(const Scene& scene) override;
 
-    virtual Metropolis::State initialize(const Scene& scene) override;
+    virtual void initialize(const Scene& scene) override;
 
-    virtual void acceptMutation() override { _currentPath = _potentialPath; }
+    virtual void acceptMutation(Metropolis::State&& newState) override;
 private:
     // Bidirectional mutations involve taking the current light path,
     // deleting a subpath and replacing it with a newly generated subpath.
@@ -66,7 +68,7 @@ private:
     // bidirectionally. Still, the spirit of this mutation should remain the
     // same.
     std::optional<Metropolis::MutationInfo>
-    bidirectionalMutation(const Scene& scene, const Metropolis::State& currentState);
+    bidirectionalMutation(const Scene& scene);
 
     // Eye path perturbations involve slightly adjusting the outgoing direction
     // of the eye ray, propagating through the same number of specular bounces
@@ -74,12 +76,12 @@ private:
     // Multichain perturbations are the same with the exception that diffuse
     // bounces are also slightly perturbed reconnecting
     std::optional<Metropolis::MutationInfo>
-    eyePathPerturbation(const Scene& scene, const Metropolis::State& currentState, bool multiChain);
+    eyePathPerturbation(const Scene& scene, bool multiChain);
 
     // New path mutations generate a new path independent of the current path
     // based on Russian Roulette.
     std::optional<Metropolis::MutationInfo>
-    computeNewPathMutation(const Scene& scene, const Metropolis::State& currentState);
+    computeNewPathMutation(const Scene& scene);
 
     std::optional<Path> _currentPath;
     Path _potentialPath;
@@ -109,7 +111,6 @@ private:
     float _accumulatedLuminance = 0.0f;
     int _numNewPathMutations = 0;
     float _averageSamplesPerPixel = 0.0f;
-    std::optional<Metropolis::State> _currentState;
 };
 
 class MLT : public IRenderer {

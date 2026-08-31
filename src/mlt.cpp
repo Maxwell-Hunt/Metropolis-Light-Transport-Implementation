@@ -67,8 +67,7 @@ float invGeometryTerm(const Path::Vertex& a, const Path::Vertex& b) {
 using namespace Metropolis;
 
 std::optional<MutationInfo> PathSpaceMutator::bidirectionalMutation(
-        const Scene& scene,
-        const State& currentState) {
+        const Scene& scene) {
     thread_local ClippedGeometricDistribution clippedGeoDist(0.5f);
     thread_local TwoSidedClippedGeometricDistribution twoSidedClippedGeoDist(0.5f);
     int currentLength = _currentPath->length();
@@ -113,7 +112,7 @@ std::optional<MutationInfo> PathSpaceMutator::bidirectionalMutation(
     } else {
         // Otherwise we bounce in a new direction according to the material
         // at vertex s.
-        info.proposal.pixel = currentState.pixel;
+        info.proposal.pixel = _currentState->pixel;
         Path::Vertex& current = _potentialPath.last();
         const Vec3 inDir = current.position - _potentialPath.vertex(s-1).position;
         const Material& material = scene.getMaterial(current.materialIdx);
@@ -164,17 +163,17 @@ std::optional<MutationInfo> PathSpaceMutator::bidirectionalMutation(
     Txy *= pd * pa;
 
     info.proposal.evaluation = evaluate(scene, _potentialPath.toSlice());
-    const float currentLuminance = luminance(currentState.evaluation.radiance);
+    const float currentLuminance = luminance(_currentState->evaluation.radiance);
     const float proposalLuminance = luminance(info.proposal.evaluation.radiance);
     info.acceptance = std::min(1.0f, (proposalLuminance * Txy) / (currentLuminance * Tyx));
     return info;
 }
 
 std::optional<MutationInfo> PathSpaceMutator::eyePathPerturbation(
-        const Scene& scene, const State& currentState, bool multiChain) {
+        const Scene& scene, bool multiChain) {
     const int width = _renderer.getWidth();
     const int height = _renderer.getHeight();
-    const Vec2 newPixel = currentState.pixel + pixelOffset(0.1f, 0.1f * width);
+    const Vec2 newPixel = _currentState->pixel + pixelOffset(0.1f, 0.1f * width);
     if (newPixel.x > width || newPixel.x < 0 ||
         newPixel.y > height || newPixel.y < 0) return std::nullopt;
     
@@ -234,7 +233,7 @@ std::optional<MutationInfo> PathSpaceMutator::eyePathPerturbation(
     }
 
     info.proposal.evaluation = evaluate(scene, _potentialPath.toSlice());
-    const float currentLuminance = luminance(currentState.evaluation.radiance);
+    const float currentLuminance = luminance(_currentState->evaluation.radiance);
     const float proposalLuminance = luminance(info.proposal.evaluation.radiance);
 
     info.acceptance = std::min(1.0f, (proposalLuminance * Txy) / (currentLuminance * Tyx));
@@ -242,7 +241,7 @@ std::optional<MutationInfo> PathSpaceMutator::eyePathPerturbation(
 }
 
 std::optional<MutationInfo> PathSpaceMutator::computeNewPathMutation(
-        const Scene& scene, const State& currentState) {
+        const Scene& scene) {
     MutationInfo info{.isNewPath = true};
     Ray newRay;
     std::tie(info.proposal.pixel, newRay) = randomEyeRay(scene);
@@ -257,7 +256,7 @@ std::optional<MutationInfo> PathSpaceMutator::computeNewPathMutation(
     
     info.proposal.evaluation = evaluate(scene, _potentialPath.toSlice());
     const float currentLuminance = luminance(
-        currentState.evaluation.russianRouletteRadiance);
+        _currentState->evaluation.russianRouletteRadiance);
     const float proposalLuminance = luminance(
         info.proposal.evaluation.russianRouletteRadiance);
 
@@ -266,19 +265,19 @@ std::optional<MutationInfo> PathSpaceMutator::computeNewPathMutation(
 }
 
 std::optional<MutationInfo> PathSpaceMutator::computeRandomMutation(
-        const Scene& scene, const State &currentState) {
+        const Scene& scene) {
     const auto mutationType =
         static_cast<MutationType>(_mutationDistribution(PCG32::RandomGenerator));
     switch (mutationType) {
-    case MutationType::NewPath:         return computeNewPathMutation(scene, currentState);
-    case MutationType::Lens:            return eyePathPerturbation(scene, currentState, false);
-    case MutationType::MultiChain:      return eyePathPerturbation(scene, currentState, true);
-    case MutationType::Bidirectional:   return bidirectionalMutation(scene, currentState);
+    case MutationType::NewPath:         return computeNewPathMutation(scene);
+    case MutationType::Lens:            return eyePathPerturbation(scene, false);
+    case MutationType::MultiChain:      return eyePathPerturbation(scene, true);
+    case MutationType::Bidirectional:   return bidirectionalMutation(scene);
     }
     return std::nullopt;
 }
 
-State PathSpaceMutator::initialize(const Scene& scene) {
+void PathSpaceMutator::initialize(const Scene& scene) {
     // Set up a valid initial state, loop until we find one.
     while (!_renderer.isStopping() && !_currentPath) {
         // Create a random path and evaluate it.
@@ -290,12 +289,15 @@ State PathSpaceMutator::initialize(const Scene& scene) {
         if (lum > Epsilon)
         {
             _currentPath = path;
-            return State{pixel, evaluation};
+            _currentState = State{pixel, evaluation};
+            break;
         }
     }
+}
 
-    // This should only happen if we are forced to stop.
-    return State{};
+void PathSpaceMutator::acceptMutation(State&& newState) {
+    Mutator::acceptMutation(std::move(newState));
+    _currentPath = std::move(_potentialPath);
 }
 
 Mutator::Mutator(const MLT& renderer) : _renderer(renderer) {}
@@ -312,22 +314,18 @@ MLTProcess::MLTProcess(const MLT& renderer, int width, int height)
 
 void MLTProcess::accumulate(const Scene& scene, const int numMutations) {
     ZoneScoped;
-    while (!_renderer.isStopping() && !_currentState) {
-        _currentState = _mutator->initialize(scene);
-    }
+    _mutator->initialize(scene);
 
     for (std::size_t i = 0; i < numMutations; ++i) {
         if (_renderer.isStopping())
             break;
 
-        Vec3 currentColor = _currentState->evaluation.radiance;
+        const State& currentState = _mutator->getCurrentState();
+        Vec3 currentColor = currentState.evaluation.radiance;
         currentColor /= luminance(currentColor);
 
-        const auto [x, y] = clampPixel(_currentState->pixel, _accumulationBuffer);
-        // assert(_currentState.has_value());
-
-        std::optional<MutationInfo> info = 
-            _mutator->computeRandomMutation(scene, *_currentState);
+        const auto [x, y] = clampPixel(currentState.pixel, _accumulationBuffer);
+        std::optional<MutationInfo> info = _mutator->computeRandomMutation(scene);
 
         if (!info) {
             _accumulationBuffer.rgb(x, y) += currentColor;
@@ -354,8 +352,7 @@ void MLTProcess::accumulate(const Scene& scene, const int numMutations) {
         _accumulationBuffer.rgb(newX, newY) += newColor * info->acceptance;
 
         if (PCG32::rand() < info->acceptance) {
-            _currentState = std::move(info->proposal);
-            _mutator->acceptMutation();
+            _mutator->acceptMutation(std::move(info->proposal));
         }
     }
 
