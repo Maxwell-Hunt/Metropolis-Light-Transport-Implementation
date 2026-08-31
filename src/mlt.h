@@ -14,6 +14,80 @@
 
 class MLT;
 
+namespace Metropolis {
+
+struct State {
+    Vec2 pixel;
+    EvaluationResult evaluation;
+};
+
+struct MutationInfo {
+    State proposal;
+    float acceptance;
+    bool isNewPath;
+};
+
+} // namespace Metropolis
+
+class Mutator {
+public:
+    explicit Mutator(const MLT& renderer);
+    virtual ~Mutator() = default;
+    virtual std::optional<Metropolis::MutationInfo>
+    computeRandomMutation(const Scene& scene) = 0;
+    virtual void initialize(const Scene& scene) = 0;
+    virtual void acceptMutation(Metropolis::State&& newState) {
+        _currentState = std::move(newState);
+    };
+    const Metropolis::State& getCurrentState() { return *_currentState; };
+protected:
+    const MLT& _renderer;
+    std::optional<Metropolis::State> _currentState;
+};
+
+class PathSpaceMutator : public Mutator {
+public:
+    enum class MutationType : int {
+        NewPath = 0,
+        Lens = 1,
+        MultiChain = 2,
+        Bidirectional = 3
+    };
+    explicit PathSpaceMutator(const MLT& renderer);
+    virtual std::optional<Metropolis::MutationInfo>
+    computeRandomMutation(const Scene& scene) override;
+
+    virtual void initialize(const Scene& scene) override;
+
+    virtual void acceptMutation(Metropolis::State&& newState) override;
+private:
+    // Bidirectional mutations involve taking the current light path,
+    // deleting a subpath and replacing it with a newly generated subpath.
+    // Note that our implementation differs slightly from that of Veach and
+    // Guibas since we currently only generate paths from the eye rather than
+    // bidirectionally. Still, the spirit of this mutation should remain the
+    // same.
+    std::optional<Metropolis::MutationInfo>
+    bidirectionalMutation(const Scene& scene);
+
+    // Eye path perturbations involve slightly adjusting the outgoing direction
+    // of the eye ray, propagating through the same number of specular bounces
+    // as the original path, and then connecting back to the original path.
+    // Multichain perturbations are the same with the exception that diffuse
+    // bounces are also slightly perturbed reconnecting
+    std::optional<Metropolis::MutationInfo>
+    eyePathPerturbation(const Scene& scene, bool multiChain);
+
+    // New path mutations generate a new path independent of the current path
+    // based on Russian Roulette.
+    std::optional<Metropolis::MutationInfo>
+    computeNewPathMutation(const Scene& scene);
+
+    std::optional<Path> _currentPath;
+    Path _potentialPath;
+    std::discrete_distribution<> _mutationDistribution;
+};
+
 class MLTProcess {
 public:
     MLTProcess(const MLT& renderer, int width, int height);
@@ -31,52 +105,12 @@ public:
     void reset();
 
 private:
-    struct State {
-        Path path;
-        Vec2 pixel;
-        EvaluationResult evaluation;
-    };
-
-    struct MutationInfo {
-        enum class Type : int {
-            NewPath = 0,
-            Lens = 1,
-            MultiChain = 2,
-            Bidirectional = 3
-        };
-        State proposal;
-        float acceptance;
-        Type type;
-    };
-
-    // Bidirectional mutations involve taking the current light path,
-    // deleting a subpath and replacing it with a newly generated subpath.
-    // Note that our implementation differs slightly from that of Veach and
-    // Guibas since we currently only generate paths from the eye rather than
-    // bidirectionally. Still, the spirit of this mutation should remain the
-    // same.
-    std::optional<MutationInfo> bidirectionalMutation(const Scene& scene);
-
-    // Eye path perturbations involve slightly adjusting the outgoing direction
-    // of the eye ray, propagating through the same number of specular bounces
-    // as the original path, and then connecting back to the original path.
-    // Multichain perturbations are the same with the exception that diffuse
-    // bounces are also slightly perturbed reconnecting
-    std::optional<MutationInfo> eyePathPerturbation(const Scene& scene, bool multiChain);
-
-    // New path mutations generate a new path independent of the current path
-    // based on Russian Roulette.
-    std::optional<MutationInfo> computeNewPathMutation(const Scene& scene);
-
-    std::optional<MutationInfo> computeRandomMutation(const Scene& scene);
-
     const MLT& _renderer;
+    std::unique_ptr<Mutator> _mutator;
     Image _accumulationBuffer;
     float _accumulatedLuminance = 0.0f;
     int _numNewPathMutations = 0;
     float _averageSamplesPerPixel = 0.0f;
-    std::optional<State> _currentState;
-    std::discrete_distribution<> _mutationDistribution;
 };
 
 class MLT : public IRenderer {
@@ -104,6 +138,9 @@ public:
     virtual void reset() override;
 
     const EnabledMutations& getConfig() const { return _config; }
+
+    int getWidth() const { return _width; }
+    int getHeight() const { return _height; }
 
 private:
     /// Compute the scaling factor needed to make the histogram approximate the image.
