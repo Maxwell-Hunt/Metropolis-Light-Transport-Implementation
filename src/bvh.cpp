@@ -28,14 +28,15 @@ SplitInfo evaluateSplit(
         float splitPosition) {
     SplitInfo info{axis, splitPosition};
     for (std::size_t i = 0; i < triangles.size(); ++i) {
+        auto positions = triangles[i].positions();
         if (triangleCenters[i][axis] < splitPosition) {
             // grow left by triangle
-            for (Vec3 position : triangles[i].positions)
+            for (Vec3 position : positions)
                 info.leftBBox.fit(position);
             ++info.numLeft;
         } else {
             // grow right by triangle
-            for (Vec3 position : triangles[i].positions)
+            for (Vec3 position : positions)
                 info.rightBBox.fit(position);
         }
     }
@@ -49,10 +50,10 @@ std::optional<BVH::HitInfo> doesRayIntersectTriangle(
         const Ray& ray, const BVH::Triangle& triangle,
         float minDistance, float maxDistance) {
     constexpr float Epsilon = 5e-7f;
-    const Vec3 ab = triangle.positions[0] - triangle.positions[1];
-    const Vec3 ac = triangle.positions[0] - triangle.positions[2];
-    const Vec3 ao = triangle.positions[0] - ray.o;
-    const Vec3 geometricNormal = cross(ab, ac);
+    const Vec3& ba = triangle.ba;
+    const Vec3& ca = triangle.ca;
+    const Vec3 oa = triangle.a - ray.o;
+    const Vec3 geometricNormal = cross(ba, ca);
     const float determinant = dot(geometricNormal, ray.d);
 
     if (std::abs(determinant) < Epsilon)
@@ -60,17 +61,17 @@ std::optional<BVH::HitInfo> doesRayIntersectTriangle(
 
     const float invDeterminant = 1 / determinant;
 
-    const float beta = dot(cross(ao, ac), ray.d) * invDeterminant;
+    const float beta = dot(cross(oa, ca), ray.d) * invDeterminant;
     if (beta < 0 || beta > 1)
         return std::nullopt;
 
-    const float gamma = dot(cross(ab, ao), ray.d) * invDeterminant;
+    const float gamma = dot(cross(ba, oa), ray.d) * invDeterminant;
     if (gamma < 0 || beta + gamma > 1)
         return std::nullopt;
 
     const float alpha = 1 - beta - gamma;
 
-    const float t = dot(geometricNormal, ao) * invDeterminant;
+    const float t = dot(geometricNormal, oa) * invDeterminant;
     if (t < minDistance || t > maxDistance)
         return std::nullopt;
 
@@ -166,9 +167,14 @@ BVH::BVH(const Mesh& mesh, const std::size_t startIdx, const std::size_t count) 
     Node& rootNode = nodes.emplace_back(AABB4(), 0, static_cast<std::uint32_t>(count));
 
     for (std::size_t i = startIdx; i < startIdx + count; ++i) {
-        Triangle& triangle = triangles.emplace_back(mesh.triangles[i].positions, i);
+        Triangle& triangle =
+            triangles.emplace_back(
+                mesh.triangles[i].positions[0],
+                mesh.triangles[i].positions[0] - mesh.triangles[i].positions[1],
+                mesh.triangles[i].positions[0] - mesh.triangles[i].positions[2],
+                i);
         triangleCenters.push_back(triangle.center());
-        for (Vec3 position : triangle.positions)
+        for (Vec3 position : mesh.triangles[i].positions)
             rootBounds.fit(position);
     }
     split(
@@ -205,18 +211,18 @@ std::optional<BVH::HitInfo> BVH::intersect(
             AABB4::HitInfo hitInfo = node.childBounds.intersect(ray);
             for (int i = 0; i < 4; ++i) {
                 std::optional<int> bestIdx;
-                float bestDist = std::numeric_limits<float>::infinity();
-                // Find the next closest hit
-                for (int i = 0; i < 4; ++i) {
-                    if (hitInfo.isHit[i] && hitInfo.distances[i] < bestDist) {
-                        bestDist = hitInfo.distances[i];
-                        bestIdx = i;
+                float farthestDist = -std::numeric_limits<float>::infinity();
+                // Find the farthest hit to push to the LIFO stack first.
+                for (int j = 0; j < 4; ++j) {
+                    if (hitInfo.isHit[j] && hitInfo.distances[j] > farthestDist) {
+                        farthestDist = hitInfo.distances[j];
+                        bestIdx = j;
                     }
                 }
                 if (!bestIdx)
                     break; // No more hits
                 const std::uint32_t childIdx = node.idx + *bestIdx;
-                stack.push({childIdx, bestDist});
+                stack.push({childIdx, farthestDist});
                 // Mark as used so we don't push it again
                 hitInfo.isHit[*bestIdx] = false;
             }
@@ -313,6 +319,10 @@ void BVH::split(
     split(nodeIdx, 3, bestRightSplit->rightCost, triangleCenters);
 }
 
+std::array<Vec3, 3> BVH::Triangle::positions() const {
+    return {a, a - ba, a - ca};
+}
+
 Vec3 BVH::Triangle::center() const {
-    return (positions[0] + positions[1] + positions[2]) / 3.0f;
+    return a - (ba + ca) / 3.0f;
 }

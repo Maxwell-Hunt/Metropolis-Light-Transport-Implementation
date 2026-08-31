@@ -34,10 +34,15 @@ public:
         }
     };
 
+    // Stored in edge representation so this doesn't
+    // have to be recomputed in doesRayIntersectTriangle
     struct Triangle {
-        std::array<Vec3, 3> positions;
+        Vec3 a;
+        Vec3 ba;
+        Vec3 ca;
         std::size_t idx;
 
+        std::array<Vec3, 3> positions() const;
         Vec3 center() const;
     };
 
