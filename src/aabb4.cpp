@@ -5,8 +5,47 @@
 #include "aabb4.h"
 
 #include <algorithm>
+#include <immintrin.h>
 
 #include "types.h"
+
+// Clang and GCC define __SSE__ if it is supported and MSVC defines
+// _M_X64 when compiling for 64 bit x86 (which is guaranteed to support SSE).
+// _M_IX86_FP >= 1 ensures that the floating point instruction set being targeted
+// is SSE or SSE2 when compiling with MSVC for 32 bit x86. 
+#if defined(__SSE__) || defined(_M_X64) || \
+    (defined(_M_IX86_FP) && _M_IX86_FP >= 1)
+    #define HAS_SSE 1
+#else
+    #define HAS_SSE 0
+#endif
+
+#define SIMD_ALIGNED alignas(16)
+
+namespace {
+
+#ifdef HAS_SSE
+__m128 loadVec4(const Vec4& value) {
+    return _mm_setr_ps(value.x, value.y, value.z, value.w);
+}
+
+Vec4 storeVec4(__m128 value) {
+    SIMD_ALIGNED float components[4];
+    _mm_store_ps(components, value);
+    return Vec4(components[0], components[1], components[2], components[3]);
+}
+
+glm::bvec4 storeMask(__m128 mask) {
+    const int bits = _mm_movemask_ps(mask);
+    return glm::bvec4(
+        (bits & 0x1) != 0,
+        (bits & 0x2) != 0,
+        (bits & 0x4) != 0,
+        (bits & 0x8) != 0);
+}
+#endif
+
+}
 
 float AABB4::getMin(int idx, int axis) const {
     switch (axis) {
@@ -61,6 +100,45 @@ AABB4::AABB4(const AABB& a, const AABB& b, const AABB& c, const AABB& d) {
 }
 
 AABB4::HitInfo AABB4::intersect(const Ray& ray) const {
+#if HAS_SSE
+    const __m128 minX = loadVec4(_minX);
+    const __m128 minY = loadVec4(_minY);
+    const __m128 minZ = loadVec4(_minZ);
+    const __m128 maxX = loadVec4(_maxX);
+    const __m128 maxY = loadVec4(_maxY);
+    const __m128 maxZ = loadVec4(_maxZ);
+
+    const __m128 originX = _mm_set1_ps(ray.o.x);
+    const __m128 originY = _mm_set1_ps(ray.o.y);
+    const __m128 originZ = _mm_set1_ps(ray.o.z);
+    const __m128 directionX = _mm_set1_ps(ray.d.x);
+    const __m128 directionY = _mm_set1_ps(ray.d.y);
+    const __m128 directionZ = _mm_set1_ps(ray.d.z);
+
+    const __m128 tminX = _mm_div_ps(_mm_sub_ps(minX, originX), directionX);
+    const __m128 tmaxX = _mm_div_ps(_mm_sub_ps(maxX, originX), directionX);
+    const __m128 tminY = _mm_div_ps(_mm_sub_ps(minY, originY), directionY);
+    const __m128 tmaxY = _mm_div_ps(_mm_sub_ps(maxY, originY), directionY);
+    const __m128 tminZ = _mm_div_ps(_mm_sub_ps(minZ, originZ), directionZ);
+    const __m128 tmaxZ = _mm_div_ps(_mm_sub_ps(maxZ, originZ), directionZ);
+
+    const __m128 tx1 = _mm_min_ps(tminX, tmaxX);
+    const __m128 tx2 = _mm_max_ps(tminX, tmaxX);
+    const __m128 ty1 = _mm_min_ps(tminY, tmaxY);
+    const __m128 ty2 = _mm_max_ps(tminY, tmaxY);
+    const __m128 tz1 = _mm_min_ps(tminZ, tmaxZ);
+    const __m128 tz2 = _mm_max_ps(tminZ, tmaxZ);
+
+    const __m128 t1 = _mm_max_ps(tx1, _mm_max_ps(ty1, tz1));
+    const __m128 t2 = _mm_min_ps(tx2, _mm_min_ps(ty2, tz2));
+
+    const __m128 zero = _mm_setzero_ps();
+    const __m128 isHit = _mm_andnot_ps(
+        _mm_and_ps(_mm_cmplt_ps(t1, zero), _mm_cmplt_ps(t2, zero)),
+        _mm_cmple_ps(t1, t2));
+
+    return {storeMask(isHit), storeVec4(t1)};
+#else
     const Vec4 tminX = (_minX - ray.o.x) / ray.d.x;
     const Vec4 tmaxX = (_maxX - ray.o.x) / ray.d.x;
     const Vec4 tminY = (_minY - ray.o.y) / ray.d.y;
@@ -85,6 +163,5 @@ AABB4::HitInfo AABB4::intersect(const Ray& ray) const {
             glm::lessThan(t2, Vec4(0.0f)));
 
     return {isHit, t1};
+#endif
 }
-
-

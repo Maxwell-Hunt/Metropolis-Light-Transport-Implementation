@@ -70,6 +70,7 @@ endif()
 
 target_compile_definitions(MLT PUBLIC
         GLM_FORCE_INTRINSICS
+        GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
         GLM_ENABLE_EXPERIMENTAL
         GLM_FORCE_SWIZZLE)
 
